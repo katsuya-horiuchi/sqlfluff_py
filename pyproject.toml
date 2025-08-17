@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=40.8.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "sqlfluff-py"
+version = "1.0.0a0"
+description = "SQLFluff for python script"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Unix",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: SQL",
+    "Topic :: Utilities",
+    "Topic :: Software Development :: Quality Assurance",
+]
+keywords = [
+    "sqlfluff",
+    "sql",
+    "linter",
+    "formatter",
+]
+
+dependencies = [
+    "pandas"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "pandas-stubs",
+    "sphinx",
+    "pydata-sphinx-theme",
+]
+
+[project.scripts]
+sqlfluff_py = "sqlfluff_py.__main__:main"
+
+[tool.black]
+line-length = 80
+target-version = ["py39", "py310", "py311", "py312", "py313"]
