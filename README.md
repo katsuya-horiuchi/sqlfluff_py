@@ -11,7 +11,7 @@ SQLFluff for python script
 ## Installation
 
 ```python
-$ pip install sqlfluff_py
+$ pip install sqlfluff-py
 ```
 
 ## Usage
@@ -25,7 +25,7 @@ When using the tool, you must specify the following:
 
 
 ```bash
-$ sqlfluff_py -i your_script.py -d ansi -p query
+$ sqlfluff-py -i your_script.py -d ansi -p query
 ```
 
 Optionally you can specify `-o` for output file, in case you would like to
@@ -33,7 +33,7 @@ keep the original file.
 By default the input file will be overwritten.
 
 ```bash
-$ sqlfluff_py -i your_script.py -d ansi -p query -o fixed_script.py
+$ sqlfluff-py -i your_script.py -d ansi -p query -o fixed_script.py
 ```
 
 
