@@ -38,6 +38,15 @@ def main() -> int:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "If this argument is specified, file will not be overwritten. "
+            "Instead formatted query will be printed to stdout. "
+            "Note that `-o` will be ignored."
+        ),
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=getattr(logging, args.logging_level))
@@ -58,10 +67,13 @@ def main() -> int:
         )
         return 0
 
-    with open(output_file, "w", encoding="utf-8") as fp:
-        fp.write(output)
+    if args.dry_run:
+        logging.info(f"Formatted output: \n{output}")
+    else:
+        logging.info(f"File was formatted: `{args.input_file}`.")
+        with open(output_file, "w", encoding="utf-8") as fp:
+            fp.write(output)
 
-    logging.info(f"File was formatted: `{args.input_file}`.")
-    if args.output_file:
-        logging.info(f"New file was created: `{output_file}`")
+        if args.output_file:
+            logging.info(f"New file was created: `{output_file}`")
     return 0

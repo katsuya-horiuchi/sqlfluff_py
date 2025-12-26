@@ -6,6 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 from io import BytesIO
+from token import tok_name
 from tokenize import (
     NAME,
     OP,
@@ -17,7 +18,7 @@ from tokenize import (
 import pandas as pd
 import sqlfluff
 
-from sqlfluff_py.tokenize import retokenize
+from sqlfluff_py.tokenize import retokenize, Token
 from sqlfluff_py.typing import TYPE_INDEX
 from sqlfluff_py.utils import adjust_end, adjust_start, quote
 
@@ -28,12 +29,13 @@ def _get_indent(df: pd.DataFrame, index: TYPE_INDEX, in_function: bool) -> int:
     """Get indent level"""
     # Get column location of variable (e.g. 4 for indent of 1)
     row = df.loc[(df.index < index) & (df["type"] == NAME)].iloc[-1]
-    col_pos = row["start"][1]
+    tok = Token.from_series(row)
+    col_pos = tok.start.y
     indent = int(col_pos / 4)
     # Add one more indent when string is within a function
     if in_function:
         indent += 1
-    _logger.debug(f"Indent for variable `{row['string']}`: {indent}")
+    _logger.debug(f"Indent for variable `{tok.string}`: {indent}")
     return indent
 
 
@@ -45,14 +47,16 @@ def _fix_query(query: str, indent: int, dialect: str | None = None) -> str:
 
     new_query: str = sqlfluff.fix(query, dialect)
     if new_query == query:
-        _logger.info(f"Query was not modified: {query}")
+        _logger.info(f"\x1b[31;20mQuery was not modified: {query}\x1b[0m")
         return query
 
+    _logger.debug("\x1b[31;20mQuery was modified.\x1b[0m")
+    _logger.debug(f"Query was fixed: \x1b[33;20m{new_query}\x1b[0m")
+    _logger.debug(f"Original query: \x1b[33;20m{query}\x1b[0m")
     # Add indent to string
     new_query = "\n".join(
         [f"{'    ' * (indent + 1)}{_}" for _ in new_query.splitlines()]
     )
-    _logger.debug(f"Query was fixed: {new_query}")
     return new_query
 
 
@@ -75,8 +79,11 @@ def get_script(
 
     # Join w/ shifted df so each row can be inspected w/ the following one
     df_shifted = df.shift(-1).reset_index(drop=True)
+    assert len(df_shifted) == len(df)
     df_shifted.columns = [f"{_}_next" for _ in df.columns]
     df = df.join(df_shifted)
+    df["type_"] = df.apply(lambda r: tok_name[r["type"]], axis=1)
+    print(df[["type", "type_", "string", "start", "end", "line"]])
 
     # Identify variables that need fixing; variable NAME followed by "=" (OP)
     df_matched = df.loc[
@@ -90,6 +97,11 @@ def get_script(
 
     row: pd.Series
     for _, row in df_matched.iterrows():
+        # breakpoint()
+        print(row.to_dict())
+        variable_name: str = row["string"]
+
+        # Find string token for the given variable
         string_row: pd.Series = df.loc[
             (df.index >= row.name) & (df["type"] == STRING)
         ].iloc[0]
@@ -98,10 +110,10 @@ def get_script(
 
         # Get indent
         row_variable_index = row.name
-        variable_name = df.loc[row_variable_index]["string"]
         assert isinstance(row_variable_index, TYPE_INDEX), type(
             row_variable_index
         )
+        print(f"{variable_name=}")
         in_function = (
             len(df.loc[(row_variable_index <= df.index) & (df.index <= index)])
             > 3
@@ -109,10 +121,12 @@ def get_script(
         indent = _get_indent(df, row_variable_index, in_function)
 
         query = string_row["string"]
-        _logger.debug(f"Fixing query: {query}")
+        _logger.debug(f"Fixing query: {query.strip()}")
         new_query = _fix_query(query, indent, dialect)
         new_query = quote(new_query, indent)
-        _logger.debug(f"Result of sqlfluff: {new_query}")
+        _logger.debug(
+            f"Result of sqlfluff for variable `{variable_name}`: {new_query}"
+        )
 
         # Adjust start/end positions for following tokens
         ql = QueryLength(len(query.splitlines()), len(new_query.splitlines()))

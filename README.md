@@ -10,7 +10,7 @@ SQLFluff for python script
 
 ## Installation
 
-```python
+```bash
 $ pip install sqlfluff-py
 ```
 
