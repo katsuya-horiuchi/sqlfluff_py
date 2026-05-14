@@ -2,7 +2,7 @@ import argparse
 import logging
 import re
 
-from sqlfluff_py import get_script
+from sqlfluff_py import fix_script
 
 
 def main() -> int:
@@ -60,7 +60,7 @@ def main() -> int:
         args.output_file if args.output_file is not None else args.input_file
     )
 
-    output = get_script(script, re.compile(rf"{args.pattern}"), args.dialect)
+    output = fix_script(script, re.compile(rf"{args.pattern}"), args.dialect)
     if script == output:
         logging.info(
             f"No change was made after running sqlfluff: {args.input_file}"

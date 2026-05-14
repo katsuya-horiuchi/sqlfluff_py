@@ -1,3 +1,5 @@
+"""Tokenize script"""
+
 from __future__ import annotations
 
 import logging
@@ -16,41 +18,9 @@ from typing import Any
 
 import pandas as pd
 
+from sqlfluff_py.typing import Position
 
 _logger = logging.getLogger(__name__)
-
-TYPE_POS = tuple[int, int]
-
-
-@dataclass
-class Position:
-    x: int
-    y: int
-
-    @classmethod
-    def from_tuple(cls, pos: tuple[int, int]) -> Position:
-        assert isinstance(pos, tuple), type(pos)
-        return cls(pos[0], pos[1])
-
-    @classmethod
-    def from_dict(cls, d: dict[str, int]) -> Position:
-        return cls(d["x"], d["y"])
-
-    @classmethod
-    def auto(cls, d: tuple[int, int] | dict[str, int]) -> Position:
-        if isinstance(d, tuple):
-            return cls.from_tuple(d)
-        if isinstance(d, dict):
-            return cls.from_dict(d)
-        if isinstance(d, Position):
-            return d
-        raise TypeError(type(d))
-
-    def __gt__(self, other: Position) -> bool:
-        return (self.x == other.x and self.y > other.y) or (self.x > other.x)
-
-    def __ge__(self, other: Position) -> bool:
-        return self == other or self > other
 
 
 @dataclass
@@ -91,16 +61,34 @@ def _log_token(token: Token) -> None:
 
 
 def _validate_token(token: Token, prev_token: Token) -> None:
-    assert token.start >= prev_token.end, (token.start, prev_token.end)
+    assert (token.start.x, token.start.y) >= (
+        prev_token.end.x,
+        prev_token.end.y,
+    ), (token.start, prev_token.end)
 
 
-def retokenize(df: pd.DataFrame, pat: re.Pattern[str]) -> pd.DataFrame:
-    """Retokenize while replacing variables within f-string with placeholder"""
+def retokenize(
+    df: pd.DataFrame, pat: re.Pattern[str]
+) -> tuple[pd.DataFrame, dict[str, str]]:
+    """Retokenize script which is parsed to dataframe while replacing f-string
+    expressions with numbered placeholders
 
+    Returns the dataframe and a mapping of placeholder key -> original
+    expression,
+    e.g.
+    {
+        "__placeholder_0__": "table_name",
+        "__placeholder_1__": "datetime.datetime.now(TZ)"
+    }
+    """
     _logger.debug("Retokenization started")
     tokens: list[Token] = []
+    placeholder_map: dict[str, str] = {}
 
     is_fstring = False
+    in_placeholder = False
+    placeholder_expr = ""
+    fstring_start: Position | None = None
     string = ""
     prev_name = ""
 
@@ -110,57 +98,55 @@ def retokenize(df: pd.DataFrame, pat: re.Pattern[str]) -> pd.DataFrame:
         _logger.debug(tok)
         if is_fstring:
             _logger.debug(f"f-string token: {tok.string}")
-            if tok.type == OP and tok.string == "{":
-                string += "[placeholder_"
             if tok.type == FSTRING_MIDDLE:
                 string += tok.string
-            if tok.type == OP and tok.string == "}":
-                string += "]"
-            if tok.type == NAME:
-                string += tok.string
+            elif tok.type == OP and tok.string == "{":
+                in_placeholder = True
+                placeholder_expr = ""
+            elif tok.type == OP and tok.string == "}" and in_placeholder:
+                in_placeholder = False
+                key = f"__placeholder_{len(placeholder_map)}__"
+                placeholder_map[key] = placeholder_expr
+                string += key
+            elif in_placeholder:
+                placeholder_expr += tok.string
 
-        if tok.type == NAME and tok.line.startswith(row["string"]):
+        if tok.type == NAME and tok.line.lstrip().startswith(row["string"]):
             prev_name = tok.string
 
         # f-string
         if tok.type == FSTRING_START and pat.search(prev_name) is not None:
-            _logger.debug("Turning on is_fstring flag")
             is_fstring = True
+            fstring_start = tok.start
         elif tok.type == FSTRING_END:
-            _logger.debug("Turning off is_fstring flag")
-            # breakpoint()
             is_fstring = False
-            end = tok.end
+            in_placeholder = False
             if string:
                 tok_string = string
-                end = Position(end.x, end.y + len(tok_string))
                 line = tok_string
             else:
                 tok_string = tok.string
                 line = tok.line
-            token = Token(STRING, tok_string, tok.start, end, line)
+            start = fstring_start if fstring_start is not None else tok.start
+            token = Token(STRING, tok_string, start, tok.end, line)
             _log_token(token)
             if tokens:
                 prev_token = tokens[-1]
-                token.start = prev_token.end
                 _validate_token(token, prev_token)
             tokens.append(token)
             string = ""
+            fstring_start = None
         else:
             if not is_fstring:
                 token = Token.from_series(row)
                 if tokens:
                     prev_token = tokens[-1]
-                    token.start = prev_token.end
                     _validate_token(token, prev_token)
                 _log_token(token)
                 tokens.append(token)
-            else:
-                pass
-                # raise RuntimeError(token)
 
     _logger.debug("Retokenization finished")
     df = pd.DataFrame([asdict(_) for _ in tokens])
-    for attr in ['start', 'end']:
+    for attr in ["start", "end"]:
         df[attr] = df.apply(lambda r: Position.auto(r[attr]), axis=1)
-    return df
+    return df, placeholder_map
