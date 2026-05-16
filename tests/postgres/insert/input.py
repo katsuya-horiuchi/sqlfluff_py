@@ -7,13 +7,8 @@ key = "ABC"
 now = datetime.datetime.now()
 
 sql = f"""
-    insert into schema.table
-    (
-        key,
-        datetime,
-        updated_time
-    )
-    values
+    insert into schema.table (key, datetime, updated_time
+    ) values
     (
         '{key}',
         '{now}'

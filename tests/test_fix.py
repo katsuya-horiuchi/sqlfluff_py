@@ -41,47 +41,66 @@ def test_fix(case: Case) -> None:
     assert result == (directory / "expected.py").read_text()
 
 
-@pytest.mark.parametrize(
-    "query, indent, expected",
-    [
-        # single-line, no placeholder
-        ("SELECT 1", 0, '"SELECT 1"'),
-        # single-line, with placeholder → f-prefix
-        ("SELECT __placeholder_0__", 0, 'f"SELECT __placeholder_0__"'),
-        # multiline, no placeholder, indent 0 → closing """ at col 0
-        (
-            """    SELECT
+@dataclass
+class QuoteCase:
+    id: str
+    indent: int
+    query: str
+    expected: str
+
+    def __str__(self) -> str:
+        return self.id
+
+
+quote_cases = [
+    QuoteCase(
+        id="single_line",
+        indent=0,
+        query="SELECT 1",
+        expected='"SELECT 1"',
+    ),
+    QuoteCase(
+        id="single_line_fstring",
+        indent=0,
+        query="SELECT __placeholder_0__",
+        expected='f"SELECT __placeholder_0__"',
+    ),
+    QuoteCase(
+        id="multiline_indent0",
+        indent=0,
+        query="""    SELECT
     FROM t""",
-            0,
-            '''"""
+        expected='''"""
     SELECT
     FROM t
 """''',
-        ),
-        # multiline, no placeholder, indent 1 → closing """ indented
-        (
-            """    SELECT
+    ),
+    QuoteCase(
+        id="multiline_indent1",
+        indent=1,
+        query="""    SELECT
     FROM t""",
-            1,
-            '''"""
+        expected='''"""
     SELECT
     FROM t
     """''',
-        ),
-        # multiline with placeholder → f-prefix
-        (
-            """    SELECT __placeholder_0__
+    ),
+    QuoteCase(
+        id="multiline_fstring",
+        query="""    SELECT __placeholder_0__
     FROM t""",
-            0,
-            '''f"""
+        indent=0,
+        expected='''f"""
     SELECT __placeholder_0__
     FROM t
 """''',
-        ),
-    ],
-)
-def test_quote(query: str, indent: int, expected: str) -> None:
-    assert _quote(query, indent) == expected
+    ),
+]
+
+
+@pytest.mark.parametrize("case", quote_cases, ids=str)
+def test_quote(case: QuoteCase) -> None:
+    assert _quote(case.query, case.indent) == case.expected
 
 
 def _make_row(
